@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gravitational Lensing Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#090D18; --panel:#101830; --panel-2:#0D1426; --line:#232C48;
+    --text:#EDEAE0; --muted:#8A93AD; --gold:#E3A94B; --gold-dim:#8A6B33;
+    --teal:#56D6C6; --rose:#D9575C;
+  }
+  html{font-family: Georgia, serif;}
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:'Inter',Arial,sans-serif;}
+  #app{min-height:100vh; background:
+    radial-gradient(1100px 550px at 10% -10%, rgba(227,169,75,0.05), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(86,214,198,0.05), transparent 55%),
+    var(--bg);
+  }
+  header{padding:20px 28px 14px; border-bottom:1px solid var(--line);}
+  .mark{font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:2px; color:var(--gold); border:1px solid var(--gold-dim); padding:3px 7px; border-radius:3px;}
+  h1{font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:21px; margin:6px 0 4px;}
+  .sub{color:var(--muted); font-size:12.5px; font-family:'JetBrains Mono',monospace; max-width:680px; line-height:1.6;}
+
+  main{display:flex; gap:0; min-height:calc(100vh - 108px); flex-wrap:wrap;}
+  .controls{width:340px; flex:none; padding:22px 24px; border-right:1px solid var(--line); background:var(--panel-2);}
+  .viz{flex:1; min-width:340px; padding:22px 26px; display:flex; flex-direction:column; align-items:center;}
+
+  label{display:block; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); margin-bottom:6px;}
+  .control-group{margin-bottom:20px;}
+  .control-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;}
+  .control-head .val{font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--gold);}
+  input[type=range]{width:100%; accent-color:var(--gold); height:4px; background:var(--line);}
+  .control-note{font-size:10.5px; color:var(--muted); margin-top:4px; font-family:'JetBrains Mono',monospace; line-height:1.5;}
+
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel); margin-bottom:16px;}
+  .toggle-row span{font-size:12.5px;}
+  .switch{position:relative; width:38px; height:20px; flex:none;}
+  .switch input{opacity:0; width:0; height:0;}
+  .slider-toggle{position:absolute; cursor:pointer; inset:0; background:var(--line); border-radius:20px; transition:.2s;}
+  .slider-toggle:before{content:""; position:absolute; height:14px; width:14px; left:3px; top:3px; background:var(--muted); border-radius:50%; transition:.2s;}
+  input:checked + .slider-toggle{background:rgba(227,169,75,0.25);}
+  input:checked + .slider-toggle:before{transform:translateX(18px); background:var(--gold);}
+
+  .btn{
+    width:100%; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--teal);
+    background:rgba(86,214,198,0.08); border:1px solid #2D5D57; padding:9px; border-radius:6px; cursor:pointer; margin-bottom:10px;
+  }
+  .btn:hover{background:rgba(86,214,198,0.15);}
+
+  .readouts{display:grid; grid-template-columns:1fr; gap:8px; margin-top:6px;}
+  .readout{border:1px solid var(--line); background:var(--panel); border-radius:8px; padding:9px 12px;}
+  .readout .rlabel{font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace;}
+  .readout .rval{font-family:'JetBrains Mono',monospace; font-size:14px; margin-top:2px;}
+
+  #canvasWrap{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#000; touch-action:none;}
+  canvas{display:block; cursor:grab;}
+  canvas:active{cursor:grabbing;}
+  .canvas-hint{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); margin-top:12px;}
+
+  .footnote{
+    padding:14px 26px 26px; border-top:1px solid var(--line); font-size:10.5px; color:var(--muted);
+    line-height:1.7; font-family:'JetBrains Mono',monospace;
+  }
+  @media (max-width:760px){
+    main{flex-direction:column;}
+    .controls{width:100%; border-right:none; border-bottom:1px solid var(--line);}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="mark">GR·LENS</span>
+    <h1>Gravitational Lensing Visualizer</h1>
+    <div class="sub">Drag the black hole across the starfield and watch background light bend around it. Grounded in real Schwarzschild-radius and photon-sphere physics, rendered with a simplified screen-space light-bending approximation.</div>
+  </header>
+
+  <main>
+    <div class="controls">
+      <div class="control-group">
+        <div class="control-head"><label style="margin:0;">BLACK HOLE MASS</label><span class="val" id="massVal">8 M☉ (solar masses)</span></div>
+        <input type="range" id="massSlider" min="1" max="30" step="1" value="8">
+        <div class="control-note">Larger mass → larger event horizon and stronger light bending.</div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-head"><label style="margin:0;">PHOTON SPHERE MULTIPLIER</label><span class="val" id="psVal">1.50×</span></div>
+        <input type="range" id="psSlider" min="1.0" max="3.0" step="0.05" value="1.5">
+        <div class="control-note">Real GR value is exactly 1.5× the Schwarzschild radius — drag to see why that specific number matters.</div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-head"><label style="margin:0;">LENSING STRENGTH</label><span class="val" id="strengthVal">1.00×</span></div>
+        <input type="range" id="strengthSlider" min="0.3" max="2.5" step="0.05" value="1">
+        <div class="control-note">Artistic exaggeration control — real deflection is far more subtle at these visual scales.</div>
+      </div>
+
+      <div class="toggle-row">
+        <span>Accretion disk</span>
+        <label class="switch"><input type="checkbox" id="diskToggle" checked><span class="slider-toggle"></span></label>
+      </div>
+
+      <button class="btn" id="regenBtn">↻ Regenerate starfield</button>
+      <button class="btn" id="resetBtn">⤾ Reset black hole position</button>
+
+      <div class="readouts">
+        <div class="readout"><div class="rlabel">EVENT HORIZON RADIUS (Rs)</div><div class="rval" id="rsOut">—</div></div>
+        <div class="readout"><div class="rlabel">PHOTON SPHERE RADIUS</div><div class="rval" id="psOut">—</div></div>
+      </div>
+    </div>
+
+    <div class="viz">
+      <div id="canvasWrap"><canvas id="lensCanvas" width="560" height="380"></canvas></div>
+      <div class="canvas-hint">Click and drag the black hole to reposition it</div>
+    </div>
+  </main>
+
+  <div class="footnote">
+    Physics grounding: event horizon size follows the real Schwarzschild radius relation (Rs ∝ mass); the photon sphere — where light can theoretically orbit the black hole — sits at exactly 1.5× Rs in real General Relativity, reproduced here as the default. The light-bending visual itself uses a simplified screen-space radial displacement (a common real-time approximation technique, not a full relativistic geodesic ray-tracer) — each background pixel is resampled outward from the black hole with a falloff proportional to 1/r, which qualitatively reproduces lensing arcs and Einstein-ring-like distortion without solving the full null-geodesic equations per photon. The accretion disk is a stylized illustrative element inspired by real lensed-disk imagery (e.g. the Event Horizon Telescope, and physically-informed renders like Interstellar's Gargantua) rather than a physically ray-traced disk.<br>
+    Built by Yash Padaya / Beyond Space.
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('lensCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const els = {
+  mass: document.getElementById('massSlider'), massVal: document.getElementById('massVal'),
+  ps: document.getElementById('psSlider'), psVal: document.getElementById('psVal'),
+  strength: document.getElementById('strengthSlider'), strengthVal: document.getElementById('strengthVal'),
+  disk: document.getElementById('diskToggle'),
+  rsOut: document.getElementById('rsOut'), psOut: document.getElementById('psOut'),
+};
+
+let hole = { x: W/2, y: H/2 };
+let dragging = false;
+
+/* ---------------- Starfield source texture (built once / on regen) ---------------- */
+let sourceCanvas = document.createElement('canvas');
+sourceCanvas.width = W; sourceCanvas.height = H;
+let sourceCtx = sourceCanvas.getContext('2d');
+let sourceData = null;
+
+function buildStarfield(){
+  sourceCtx.fillStyle = '#05070E';
+  sourceCtx.fillRect(0,0,W,H);
+  // faint nebula tint
+  const grad = sourceCtx.createRadialGradient(W*0.3,H*0.25,10,W*0.3,H*0.25,W*0.6);
+  grad.addColorStop(0, 'rgba(86,50,120,0.12)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  sourceCtx.fillStyle = grad;
+  sourceCtx.fillRect(0,0,W,H);
+
+  const starCount = 420;
+  for(let i=0;i<starCount;i++){
+    const x = Math.random()*W, y = Math.random()*H;
+    const r = Math.random() < 0.05 ? (1.2+Math.random()*1.3) : (0.4+Math.random()*0.9);
+    const b = 0.4 + Math.random()*0.6;
+    const tint = Math.random();
+    let color;
+    if(tint < 0.1) color = `rgba(180,200,255,${b})`;
+    else if(tint < 0.2) color = `rgba(255,210,170,${b})`;
+    else color = `rgba(237,234,224,${b})`;
+    sourceCtx.beginPath();
+    sourceCtx.arc(x,y,r,0,Math.PI*2);
+    sourceCtx.fillStyle = color;
+    sourceCtx.fill();
+  }
+  sourceData = sourceCtx.getImageData(0,0,W,H);
+}
+buildStarfield();
+
+/* ---------------- Physics-derived parameters ---------------- */
+function getParams(){
+  const mass = parseFloat(els.mass.value);
+  const psMult = parseFloat(els.ps.value);
+  const strength = parseFloat(els.strength.value);
+  const Rs = 6 + mass * 3.2; // px, scaled for visual clarity (not to physical scale)
+  const photonR = Rs * psMult;
+  return { mass, psMult, strength, Rs, photonR };
+}
+
+/* ---------------- Render: screen-space lensing remap ---------------- */
+function render(){
+  const { Rs, photonR, strength } = getParams();
+  const out = ctx.createImageData(W, H);
+  const src = sourceData.data;
+  const dst = out.data;
+  const bx = hole.x, by = hole.y;
+  const k = 900 * strength; // deflection strength constant (visual, not physically scaled)
+
+  for(let y=0; y<H; y++){
+    for(let x=0; x<W; x++){
+      const idx = (y*W + x) * 4;
+      const dx = x - bx, dy = y - by;
+      const r = Math.sqrt(dx*dx + dy*dy);
+
+      if(r < Rs){
+        dst[idx]=0; dst[idx+1]=0; dst[idx+2]=0; dst[idx+3]=255;
+        continue;
+      }
+
+      const deflect = k / (r);
+      const factor = 1 + deflect / r;
+      let sx = bx + dx*factor;
+      let sy = by + dy*factor;
+      sx = Math.max(0, Math.min(W-1, sx));
+      sy = Math.max(0, Math.min(H-1, sy));
+      const sIdx = (Math.floor(sy)*W + Math.floor(sx)) * 4;
+
+      let rr = src[sIdx], gg = src[sIdx+1], bb = src[sIdx+2], aa = src[sIdx+3];
+
+      // photon-sphere glow ring
+      if(Math.abs(r - photonR) < 1.6){
+        const glow = 1 - Math.abs(r-photonR)/1.6;
+        rr = Math.min(255, rr + 255*glow*0.9);
+        gg = Math.min(255, gg + 210*glow*0.9);
+        bb = Math.min(255, bb + 140*glow*0.6);
+      }
+
+      dst[idx]=rr; dst[idx+1]=gg; dst[idx+2]=bb; dst[idx+3]=255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+
+  if(els.disk.checked) drawDisk(Rs, photonR);
+
+  // subtle event horizon rim
+  ctx.beginPath();
+  ctx.arc(bx, by, Rs, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(227,169,75,0.25)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function drawDisk(Rs, photonR){
+  const bx = hole.x, by = hole.y;
+  const innerR = photonR * 1.05;
+  const outerR = Rs * 5.2;
+  const tiltY = 0.28;
+
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.scale(1, tiltY);
+
+  // back arc (behind hole, lensed image appears above)
+  drawDiskArc(-outerR, -innerR, 0.55);
+  // front arc (in front, below)
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0,0,Rs,0,Math.PI*2);
+  ctx.clip();
+  ctx.restore();
+  drawDiskArc(innerR, outerR, 0.9);
+
+  ctx.restore();
+
+  // re-punch the event horizon on top so disk never overlaps the black hole itself
+  ctx.beginPath();
+  ctx.arc(bx, by, Rs, 0, Math.PI*2);
+  ctx.fillStyle = '#000';
+  ctx.fill();
+}
+
+function drawDiskArc(rInner, rOuter, alphaMax){
+  const steps = 60;
+  for(let i=0;i<steps;i++){
+    const t = i/steps;
+    const rad = rInner + (rOuter-rInner)*t;
+    const alpha = alphaMax * (1-t) * 0.9;
+    const hue = 30 + t*20;
+    ctx.beginPath();
+    ctx.arc(0,0, Math.abs(rad), 0, Math.PI*2);
+    ctx.lineWidth = Math.abs(rOuter-rInner)/steps + 1;
+    ctx.strokeStyle = `hsla(${hue}, 90%, ${55+t*15}%, ${alpha})`;
+    ctx.stroke();
+  }
+}
+
+/* ---------------- Interaction ---------------- */
+function getPos(e){
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: (clientX-rect.left) * (W/rect.width), y: (clientY-rect.top) * (H/rect.height) };
+}
+function startDrag(e){ dragging = true; moveDrag(e); }
+function moveDrag(e){
+  if(!dragging) return;
+  const p = getPos(e);
+  hole.x = p.x; hole.y = p.y;
+  render();
+  e.preventDefault();
+}
+function endDrag(){ dragging = false; }
+
+canvas.addEventListener('mousedown', startDrag);
+window.addEventListener('mousemove', moveDrag);
+window.addEventListener('mouseup', endDrag);
+canvas.addEventListener('touchstart', startDrag, {passive:false});
+window.addEventListener('touchmove', moveDrag, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+[els.mass, els.ps, els.strength].forEach(s => s.addEventListener('input', updateAndRender));
+els.disk.addEventListener('change', render);
+document.getElementById('regenBtn').addEventListener('click', () => { buildStarfield(); render(); });
+document.getElementById('resetBtn').addEventListener('click', () => { hole = {x:W/2,y:H/2}; render(); });
+
+function updateAndRender(){
+  const p = getParams();
+  els.massVal.textContent = `${p.mass} M☉ (solar masses)`;
+  els.psVal.textContent = `${p.psMult.toFixed(2)}×`;
+  els.strengthVal.textContent = `${p.strength.toFixed(2)}×`;
+  els.rsOut.textContent = `${p.Rs.toFixed(1)} px`;
+  els.psOut.textContent = `${p.photonR.toFixed(1)} px`;
+  render();
+}
+
+updateAndRender();
+</script>
+</body>
+</html>
